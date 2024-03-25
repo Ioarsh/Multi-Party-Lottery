@@ -29,7 +29,20 @@ contract Multi_Party_Lottery is CommitReveal{
         owner = payable(msg.sender);
     }
 
-    function _reset() private{
+    function force_reset() public{
+        require(owner == msg.sender);
+        timestamp = 0;
+        revealcount = 0;
+        for(uint i=0;i<numPlayer;i++){
+            PlayerIndex[player[i].addr] = 0;
+            player[i].addr = address(0);
+            player[i].choice = 7777;
+        }
+        numPlayer = 0;
+        delete validUser;
+    }
+
+    function auto_reset() private{
         timestamp = 0;
         revealcount = 0;
         for(uint i=0;i<numPlayer;i++){
@@ -86,15 +99,18 @@ contract Multi_Party_Lottery is CommitReveal{
         else{
             owner.transfer(numPlayer*(1000000000000000));
         }
-        _reset();
+        auto_reset();
     }
     
     function withdraw() public payable {
         require(timestamp+T1+T2+T3 < block.timestamp);
         uint idx = PlayerIndex[msg.sender];
-        require(player[idx].good = true);
+        require(player[idx].good == true);
         address payable acc = payable (msg.sender);
         acc.transfer(0.001 ether);
         player[idx].good = false;
+        if((address(this).balance == 0)){
+            auto_reset();
+        }
     }
 }

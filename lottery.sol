@@ -16,10 +16,8 @@ contract Multi_Party_Lottery is CommitReveal{
     uint private T3=0;
     uint private N=0;
     uint private numPlayer = 0;
-    uint private stage=1;
     uint private timestamp=0;
     uint private revealcount=0;
-    uint private reward=0;
     address[] public validUser;
     address payable owner;
     constructor(uint t1, uint n,uint t2,uint t3){
@@ -32,10 +30,6 @@ contract Multi_Party_Lottery is CommitReveal{
     }
 
     function _reset() private{
-        T1=0;
-        T2=0;
-        N=0;
-        stage = 1;
         timestamp = 0;
         revealcount = 0;
         for(uint i=0;i<numPlayer;i++){
@@ -44,43 +38,17 @@ contract Multi_Party_Lottery is CommitReveal{
             player[i].choice = 7777;
         }
         numPlayer = 0;
-        reward=0;
         delete validUser;
     }
 
-    function ChangeStage(uint st) public{
-        if(st==2){
-            require(stage==1);
-            require(timestamp+T1 < block.timestamp);
-            stage=2;
-            timestamp=block.timestamp;
-        }
-        else if(st==3){
-            require(stage==2);
-            require(timestamp+T2 < block.timestamp);
-            stage=3;
-            timestamp=block.timestamp;
-        }
-        else if(st==4){
-            require(stage==3);
-            require(timestamp+T3 < block.timestamp);
-            stage=4;
-        }
-    }
-
-
     function addPlayer(uint transaction,uint salt) public payable {
-        require(numPlayer < N);
-        require(msg.value==0.001 ether);
-        require(transaction>=0 && transaction<=999);
-        require(stage==1);
         if(timestamp==0){
             timestamp = block.timestamp;
         }
-        else if(timestamp+T1 < block.timestamp){
-            ChangeStage(2);
-            return();
-        }
+        require(timestamp+T1 > block.timestamp);
+        require(numPlayer < N);
+        require(msg.value==0.001 ether);
+        require(transaction>=0 && transaction<=999);
         player[numPlayer].addr = msg.sender;
         PlayerIndex[msg.sender] = numPlayer;
         uint idx = PlayerIndex[msg.sender];
@@ -89,15 +57,10 @@ contract Multi_Party_Lottery is CommitReveal{
         player[idx].good = false;
         commit(bytes32(HashedData));
         numPlayer++;
-        reward+=msg.value;
     }
 
     function RevealAns(uint transaction,uint saltz) public{
-        require(stage == 2);
-        if(timestamp+T2 < block.timestamp){
-            ChangeStage(3);
-            return();
-        }
+        require(timestamp+T1+T2 > block.timestamp && block.timestamp > timestamp+T1);
         revealAnswer(bytes32(transaction),bytes32(saltz));
         uint idx = PlayerIndex[msg.sender];
         player[idx].choice = transaction;
@@ -108,8 +71,8 @@ contract Multi_Party_Lottery is CommitReveal{
 
 
     function checkWinnerAndPay() public {
+        require(timestamp+T1+T2+T3 > block.timestamp && block.timestamp > timestamp+T1+T2);
         require(owner == msg.sender);
-        require(stage==3);
         uint winner = uint(keccak256(abi.encodePacked(block.timestamp, blockhash(block.number), block.number)));
         for(uint i=0;i<revealcount;i++){
             winner = winner ^ player[PlayerIndex[validUser[i]]].choice; 
@@ -127,7 +90,7 @@ contract Multi_Party_Lottery is CommitReveal{
     }
     
     function withdraw() public payable {
-        require(stage==4);
+        require(timestamp+T1+T2+T3 < block.timestamp);
         uint idx = PlayerIndex[msg.sender];
         require(player[idx].good = true);
         address payable acc = payable (msg.sender);
